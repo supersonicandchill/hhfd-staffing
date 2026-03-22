@@ -823,6 +823,7 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
     const next = plannerDays.filter(d=>d.date!==date);
     setPlannerDays(next);
     setResetConf(null);
+    setSelected(null);
   }
 
   function copyToday(date) {
@@ -850,10 +851,10 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
   }
 
   return (
-    <div style={{display:"grid",gridTemplateColumns:"1fr 420px",gap:0,minHeight:"calc(100vh - 60px)"}}>
+    <div style={{display:"flex",flexDirection:"column",minHeight:"calc(100vh - 62px)"}}>
 
-      {/* ── Left: Calendar ── */}
-      <div style={{padding:16,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
+      {/* ── Full-width Calendar ── */}
+      <div style={{padding:16, overflowY:"auto"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
           <Btn onClick={prevMonth} variant="secondary" size="sm">‹</Btn>
@@ -863,72 +864,85 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
         </div>
 
         {/* Day-of-week headers */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
           {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>(
-            <div key={d} style={{textAlign:"center",fontSize:10,fontWeight:700,color:C.textMuted,padding:"3px 0"}}>{d}</div>
+            <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:C.textMuted,padding:"4px 0"}}>{d}</div>
           ))}
         </div>
 
-        {/* Calendar grid */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {/* Calendar grid — larger cells, full width */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
           {cells.map((day,i)=>{
             if(!day) return <div key={i}/>;
             const ud=unitDef(day.unit);
             const ds=getDayState(day.date);
             const hasData=ds.onDuty.length>0;
-            const sel=selected===day.date;
+            const countOK=ds.onDuty.length>=16&&ds.onDuty.length<=20;
             return (
-              <div key={day.date} onClick={()=>setSelected(sel?null:day.date)}
-                style={{borderRadius:8,padding:"7px 5px",cursor:"pointer",minHeight:58,
-                  background:sel?C.bg4:(ud?.bg||C.bg2),
-                  border:`2px solid ${sel?C.accent:(ud?.border||C.border)}`,
-                  boxShadow:sel?`0 0 0 2px ${C.accent}40`:"none",
-                  transition:"all .12s"}}>
-                <div style={{fontSize:11,fontWeight:700,color:day.isToday?C.accent:(ud?ud.text:C.textMuted),textAlign:"center"}}>{day.day}</div>
-                <div style={{textAlign:"center",marginTop:3}}>
-                  <span style={{fontSize:9,fontWeight:800,color:ud?.text,background:ud?.bg,border:`1px solid ${ud?.border}`,borderRadius:3,padding:"1px 4px"}}>{ud?.label}</span>
-                </div>
-                {hasData&&<div style={{textAlign:"center",marginTop:3}}>
-                  <span style={{fontSize:9,fontWeight:700,color:ds.onDuty.length>=16&&ds.onDuty.length<=20?C.green:C.amber}}>{ds.onDuty.length} on duty</span>
-                </div>}
+              <div key={day.date} onClick={()=>setSelected(day.date)}
+                style={{borderRadius:10,padding:"10px 8px",cursor:"pointer",minHeight:80,
+                  background:ud?.bg||C.bg2,
+                  border:`2px solid ${day.isToday?C.accent:(ud?.border||C.border)}`,
+                  boxShadow:day.isToday?`0 0 0 2px ${C.accent}40`:"none",
+                  transition:"all .12s", display:"flex", flexDirection:"column", gap:4,
+                  alignItems:"center"}}>
+                <div style={{fontSize:13,fontWeight:800,
+                  color:day.isToday?C.accent:(ud?ud.text:C.textMuted)}}>{day.day}</div>
+                <span style={{fontSize:10,fontWeight:800,color:ud?.text,
+                  background:ud?.color+"30",border:`1px solid ${ud?.border}`,
+                  borderRadius:4,padding:"2px 6px"}}>{ud?.label}</span>
+                {hasData
+                  ? <span style={{fontSize:10,fontWeight:700,
+                      color:countOK?C.green:C.amber}}>{ds.onDuty.length} on duty</span>
+                  : <span style={{fontSize:10,color:C.textMuted}}>tap to plan</span>
+                }
               </div>
             );
           })}
         </div>
 
         {/* Legend */}
-        <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
-          {UNIT_DEFS.map(u=><span key={u.key} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:u.text}}>
-            <span style={{width:10,height:10,borderRadius:2,background:u.color,display:"inline-block"}}/>
-            {u.label}
-          </span>)}
+        <div style={{display:"flex",gap:14,marginTop:16,flexWrap:"wrap"}}>
+          {UNIT_DEFS.map(u=>(
+            <span key={u.key} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:u.text}}>
+              <span style={{width:10,height:10,borderRadius:2,background:u.color,display:"inline-block"}}/>
+              {u.label}
+            </span>
+          ))}
+          <span style={{fontSize:11,color:C.textMuted}}>· Click any day to open full staffing board</span>
         </div>
       </div>
 
-      {/* ── Right: Selected day editor ── */}
-      <div style={{overflowY:"auto",background:C.bg1}}>
-        {!selected?(
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",color:C.textMuted,gap:10,padding:40,textAlign:"center"}}>
-            <span style={{fontSize:36}}>📅</span>
-            <span>Select a day on the calendar to plan staffing.</span>
-          </div>
-        ):(
-          <div style={{padding:14}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-              <div>
-                <div style={{fontWeight:800,fontSize:14}}>{fmtDateShort(selected)}</div>
-                <div style={{fontSize:11,color:unitDef(selectedUnit)?.text,fontWeight:700}}>{unitDef(selectedUnit)?.label}</div>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <Btn onClick={()=>setCopyConf(selected)} variant="secondary" size="sm">📋 Copy Last Shift</Btn>
-                <Btn onClick={()=>setResetConf(selected)} variant="danger" size="sm">↺ Reset</Btn>
+      {/* ── Full-screen day modal ── */}
+      {selected && (
+        <div style={{position:"fixed",inset:0,background:"rgba(3,9,18,.92)",zIndex:450,
+          display:"flex",flexDirection:"column",backdropFilter:"blur(4px)"}}>
+
+          {/* Modal header bar */}
+          <div style={{background:C.bg2,borderBottom:`1px solid ${C.border}`,
+            padding:"12px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0,
+            boxShadow:"0 2px 16px #00000060"}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:900,fontSize:16,color:C.text}}>{fmtDateLong(selected)}</div>
+              <div style={{fontSize:11,color:unitDef(selectedUnit)?.text,fontWeight:700,marginTop:1}}>
+                {unitDef(selectedUnit)?.label}
               </div>
             </div>
-            <DayBoard roster={roster} stations={stations} dayState={selectedDayState}
-              onChange={state=>updateDay(selected,state)} shiftUnitKey={selectedUnit} compact={true}/>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <Btn onClick={()=>setCopyConf(selected)} variant="secondary" size="sm">📋 Copy Last Shift</Btn>
+              <Btn onClick={()=>setResetConf(selected)} variant="danger" size="sm">↺ Reset</Btn>
+              <Btn onClick={()=>setSelected(null)} variant="ghost" size="sm"
+                style={{fontSize:18,padding:"4px 10px"}}>✕</Btn>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Full scrollable board */}
+          <div style={{flex:1,overflowY:"auto",padding:16}}>
+            <DayBoard roster={roster} stations={stations} dayState={selectedDayState}
+              onChange={state=>updateDay(selected,state)} shiftUnitKey={selectedUnit} compact={false}/>
+          </div>
+        </div>
+      )}
 
       {/* Rotation settings modal */}
       {editAnchor&&<RotationModal anchor={anchor} onSave={a=>{setAnchor(a);setEditAnchor(false);}} onClose={()=>setEditAnchor(false)}/>}
