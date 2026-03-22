@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,16 +8,12 @@
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #060d18; }
-  </style>
+  <style>* { box-sizing: border-box; margin: 0; padding: 0; } body { background: #060d18; }</style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
     const { useState, useMemo, useRef } = React;
-
 
 // ─── CERT / UNIT / ABSENCE DEFINITIONS ───────────────────────────────────────
 const CERT_DEFS = [
@@ -133,7 +130,7 @@ const DEFAULT_STATIONS = [
   ]},
 ];
 
-// 24/48 rotation: Unit 1 → Unit 2 → Unit 3, each on 24h then 48h off
+// Straight 24/24/24 rotation: Unit 1 → Unit 2 → Unit 3 → repeat
 // anchor: today = Unit 2, day 0 of their shift
 const getDefaultAnchor = () => ({ date: todayStr(), unit: "2" });
 
@@ -152,28 +149,18 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function dateStr(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
-
 function daysBetween(a, b) {
   const da=new Date(a+"T12:00:00"), db=new Date(b+"T12:00:00");
   return Math.round((db-da)/(1000*60*60*24));
 }
 
-// Given an anchor {date, unit} and a target date string, return which unit is on duty
-// or null if it's an off day. 24/48 cycle: each unit works 24h then 48h off.
-// Cycle length = 3 days. Unit order cycles 1→2→3→1→...
+// Straight 24/24/24 rotation: Unit 1 → Unit 2 → Unit 3 → Unit 1 → ...
+// Every single day is a shift day for exactly one unit. No off days.
 function getShiftUnit(anchor, targetDate) {
   const unitOrder = ["1","2","3"];
   const anchorIdx = unitOrder.indexOf(anchor.unit);
   const diff = daysBetween(anchor.date, targetDate);
-  // Normalize into 0-based cycle position — handles negative diffs (past dates) correctly
-  const cyclePos = ((diff % 3) + 3) % 3;
-  if (cyclePos !== 0) return null; // off day
-  // Floor division that works correctly for negative numbers
-  const cycles = Math.floor(diff / 3);
-  const unitIdx = ((anchorIdx + cycles) % 3 + 3) % 3;
+  const unitIdx = ((anchorIdx + diff) % 3 + 3) % 3;
   return unitOrder[unitIdx];
 }
 
@@ -798,10 +785,7 @@ function TodayTab({ roster, stations, dayState, onChange, anchor }) {
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fmtDateLong(today)}</div>
-          {shiftUD
-            ? <div style={{fontSize:11,color:shiftUD.text,fontWeight:700,marginTop:2}}>{shiftUD.label} — On Duty</div>
-            : <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>Off day per rotation</div>
-          }
+          <div style={{fontSize:11,color:shiftUD?.text,fontWeight:700,marginTop:2}}>{shiftUD?.label} — On Duty</div>
         </div>
         {shiftUD&&<UnitBadge unitKey={shiftUnit}/>}
       </div>
@@ -819,6 +803,7 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selected,  setSelected]  = useState(null); // date string
   const [copyConf,  setCopyConf]  = useState(null);
+  const [copyNoSrc, setCopyNoSrc] = useState(false);
   const [resetConf, setResetConf] = useState(null);
   const [editAnchor,setEditAnchor]= useState(false);
 
@@ -842,7 +827,7 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
 
   function copyToday(date) {
     const src = plannerDays.filter(d=>d.date<date&&d.onDuty.length>0).sort((a,b)=>b.date.localeCompare(a.date))[0];
-    if(!src){ setCopyConf(null); alert("No previously planned shift found to copy from."); return; }
+    if(!src){ setCopyConf(null); setCopyNoSrc(true); return; }
     updateDay(date,{onDuty:[...src.onDuty],assignments:{...src.assignments}});
     setCopyConf(null);
   }
@@ -895,14 +880,14 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
             return (
               <div key={day.date} onClick={()=>setSelected(sel?null:day.date)}
                 style={{borderRadius:8,padding:"7px 5px",cursor:"pointer",minHeight:58,
-                  background:sel?C.bg4:day.unit?(ud?.bg||C.bg2):C.bg1,
-                  border:`2px solid ${sel?C.accent:day.unit?(ud?.border||C.border):C.border}`,
+                  background:sel?C.bg4:(ud?.bg||C.bg2),
+                  border:`2px solid ${sel?C.accent:(ud?.border||C.border)}`,
                   boxShadow:sel?`0 0 0 2px ${C.accent}40`:"none",
-                  opacity:day.unit?1:.45,transition:"all .12s"}}>
+                  transition:"all .12s"}}>
                 <div style={{fontSize:11,fontWeight:700,color:day.isToday?C.accent:(ud?ud.text:C.textMuted),textAlign:"center"}}>{day.day}</div>
-                {day.unit&&<div style={{textAlign:"center",marginTop:3}}>
+                <div style={{textAlign:"center",marginTop:3}}>
                   <span style={{fontSize:9,fontWeight:800,color:ud?.text,background:ud?.bg,border:`1px solid ${ud?.border}`,borderRadius:3,padding:"1px 4px"}}>{ud?.label}</span>
-                </div>}
+                </div>
                 {hasData&&<div style={{textAlign:"center",marginTop:3}}>
                   <span style={{fontSize:9,fontWeight:700,color:ds.onDuty.length>=16&&ds.onDuty.length<=20?C.green:C.amber}}>{ds.onDuty.length} on duty</span>
                 </div>}
@@ -915,9 +900,8 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
         <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
           {UNIT_DEFS.map(u=><span key={u.key} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:u.text}}>
             <span style={{width:10,height:10,borderRadius:2,background:u.color,display:"inline-block"}}/>
-            {u.label} on duty
+            {u.label}
           </span>)}
-          <span style={{fontSize:11,color:C.textMuted,opacity:.5}}>◻ Off day</span>
         </div>
       </div>
 
@@ -926,31 +910,22 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
         {!selected?(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",color:C.textMuted,gap:10,padding:40,textAlign:"center"}}>
             <span style={{fontSize:36}}>📅</span>
-            <span>Select a shift day on the calendar to plan staffing.</span>
-            <span style={{fontSize:11}}>Gray days are off days.</span>
+            <span>Select a day on the calendar to plan staffing.</span>
           </div>
         ):(
           <div style={{padding:14}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
               <div>
                 <div style={{fontWeight:800,fontSize:14}}>{fmtDateShort(selected)}</div>
-                {selectedUnit
-                  ? <div style={{fontSize:11,color:unitDef(selectedUnit)?.text,fontWeight:700}}>{unitDef(selectedUnit)?.label}</div>
-                  : <div style={{fontSize:11,color:C.textMuted}}>Off day</div>}
+                <div style={{fontSize:11,color:unitDef(selectedUnit)?.text,fontWeight:700}}>{unitDef(selectedUnit)?.label}</div>
               </div>
               <div style={{display:"flex",gap:6}}>
                 <Btn onClick={()=>setCopyConf(selected)} variant="secondary" size="sm">📋 Copy Last Shift</Btn>
                 <Btn onClick={()=>setResetConf(selected)} variant="danger" size="sm">↺ Reset</Btn>
               </div>
             </div>
-            {selectedUnit ? (
-              <DayBoard roster={roster} stations={stations} dayState={selectedDayState}
-                onChange={state=>updateDay(selected,state)} shiftUnitKey={selectedUnit} compact={true}/>
-            ) : (
-              <div style={{...base.card,textAlign:"center",padding:24,color:C.textMuted,fontSize:13}}>
-                This is an off day in the 24/48 rotation. Select a green, blue, or red shift day to plan staffing.
-              </div>
-            )}
+            <DayBoard roster={roster} stations={stations} dayState={selectedDayState}
+              onChange={state=>updateDay(selected,state)} shiftUnitKey={selectedUnit} compact={true}/>
           </div>
         )}
       </div>
@@ -961,6 +936,9 @@ function PlannerTab({ roster, stations, plannerDays, setPlannerDays, anchor, set
       {copyConf&&(
         <Confirm msg="Copy the most recently planned shift's roster and assignments to this day? This will overwrite any existing plan for this day."
           yesLabel="Copy" yesVariant="primary" onYes={()=>copyToday(copyConf)} onNo={()=>setCopyConf(null)}/>
+      )}
+      {copyNoSrc&&(
+        <Confirm msg="No previously planned shift found to copy from. Plan at least one earlier shift first, then use Copy." yesLabel="Got it" yesVariant="secondary" onYes={()=>setCopyNoSrc(false)} onNo={()=>setCopyNoSrc(false)}/>
       )}
       {resetConf&&(
         <Confirm msg={`Reset all staffing for ${fmtDateShort(resetConf)}?`} yesLabel="Reset" yesVariant="danger"
@@ -976,7 +954,7 @@ function RotationModal({ anchor, onSave, onClose }) {
   return (
     <Modal title="⚙ Rotation Settings" onClose={onClose} width={380}>
       <p style={{color:C.textSub,fontSize:13,marginTop:0,lineHeight:1.6}}>
-        Set a known reference point: pick a date and which unit was on duty that day at 0730. The calendar will calculate the full 24/48 rotation from there.
+        Set a known reference point: pick a date and which unit was on duty that day at 0730. The calendar will calculate the full 24/24/24 rotation from there.
       </p>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
@@ -1398,7 +1376,7 @@ function App() {
 
 // AppShell holds all app state scoped to one unit
 function AppShell({ unitKey, onSwitchUnit }) {
-  const K = (base) => `${base}_u${unitKey}`;
+  const K = (k) => `${k}_u${unitKey}`;
   const ud = unitDef(unitKey);
 
   const [roster,      setRoster]      = useState(()=>load(K("hhfd_roster"),    DEFAULT_ROSTER));
@@ -1502,7 +1480,6 @@ function AppShell({ unitKey, onSwitchUnit }) {
     </div>
   );
 }
-
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(React.createElement(App));
