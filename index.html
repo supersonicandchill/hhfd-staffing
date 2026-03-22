@@ -443,9 +443,29 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
     setDragOver(null);
   }
 
-  // Click slot to clear
-  function clearSlot(slotId) {
-    onChange({ onDuty:onDutyIds, assignments:{...assignments,[slotId]:null} });
+  // ── Removal confirmation — prevents accidental clicks ──
+  const [confirmPending, setConfirmPending] = useState(null);
+  // confirmPending = { type:"offduty", empId, name } | { type:"slot", slotId, name }
+
+  function requestRemoveFromDuty(emp) {
+    if (!onDutyIds.includes(emp.id)) return; // adding — no confirm needed
+    setConfirmPending({ type:"offduty", empId:emp.id, name:emp.name });
+  }
+
+  function requestClearSlot(slotId, empName) {
+    setConfirmPending({ type:"slot", slotId, name:empName });
+  }
+
+  function confirmRemove() {
+    if (!confirmPending) return;
+    if (confirmPending.type === "offduty") {
+      const nextA = {...assignments};
+      Object.keys(nextA).forEach(k=>{ if(nextA[k]===confirmPending.empId) nextA[k]=null; });
+      onChange({ onDuty:onDutyIds.filter(x=>x!==confirmPending.empId), assignments:nextA });
+    } else {
+      onChange({ onDuty:onDutyIds, assignments:{...assignments,[confirmPending.slotId]:null} });
+    }
+    setConfirmPending(null);
   }
 
   // Toggle on-duty manually
@@ -453,9 +473,7 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
     const emp = roster.find(r=>r.id===empId);
     if(emp?.absence) return;
     if(onDutyIds.includes(empId)) {
-      const nextA={...assignments};
-      Object.keys(nextA).forEach(k=>{ if(nextA[k]===empId) nextA[k]=null; });
-      onChange({ onDuty:onDutyIds.filter(x=>x!==empId), assignments:nextA });
+      requestRemoveFromDuty(emp); // route through confirmation
     } else {
       onChange({ onDuty:[...onDutyIds,empId], assignments });
     }
@@ -604,7 +622,7 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
                   onDragEnd={onDragEnd}
                   onClick={()=>!absent&&toggleOnDuty(emp.id)}
                   style={{ display:"flex", alignItems:"center", gap:7, padding:"6px 9px",
-                    borderRadius:7, cursor:absent?"default":onDuty&&assigned?"default":"grab",
+                    borderRadius:7, cursor:absent?"default":"pointer",
                     background: absent ? C.bg1 : onDuty ? (ud?ud.bg:C.greenDim) : C.bg1,
                     border:`1px solid ${absent?C.border:onDuty?(ud?ud.border:C.greenBorder):C.border}`,
                     opacity:absent?.4:1, transition:"background .12s,border .12s", userSelect:"none" }}>
@@ -746,7 +764,7 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
                                 )}
                               </div>
                               {emp && (
-                                <Btn onClick={()=>clearSlot(slot.id)} variant="danger" size="sm"
+                                <Btn onClick={()=>requestClearSlot(slot.id, emp.name)} variant="danger" size="sm"
                                   style={{ padding:"5px 9px" }}>✕</Btn>
                               )}
                             </div>
@@ -761,6 +779,35 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
           );
         })}
       </div>
+
+      {/* ── Removal confirmation popover ── */}
+      {confirmPending && (
+        <div style={{ position:"fixed", inset:0, zIndex:490,
+          display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={()=>setConfirmPending(null)}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{ background:C.bg2, border:`1px solid ${C.redBorder}`,
+              borderRadius:12, padding:"16px 20px", maxWidth:320, width:"90%",
+              boxShadow:"0 8px 40px #00000090, 0 0 0 1px #7f1d1d",
+              display:"flex", flexDirection:"column", gap:12 }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.red, marginBottom:4 }}>
+                {confirmPending.type==="offduty" ? "Remove from duty?" : "Remove from slot?"}
+              </div>
+              <div style={{ fontSize:12, color:C.textSub, lineHeight:1.5 }}>
+                <b style={{ color:C.text }}>{confirmPending.name}</b>
+                {confirmPending.type==="offduty"
+                  ? " will be removed from duty and unassigned from all trucks."
+                  : " will be removed from this slot but stays on duty."}
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <Btn onClick={()=>setConfirmPending(null)} variant="ghost" size="sm">Keep</Btn>
+              <Btn onClick={confirmRemove} variant="danger" size="sm">Yes, Remove</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {resetConf && (
         <Confirm msg="Clear all on-duty selections and assignments for this day?"
