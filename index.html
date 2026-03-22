@@ -42,7 +42,13 @@ const unitDef   = k => UNIT_DEFS.find(u=>u.key===k)   || null;
 const absenceDef= k => ABSENCE_DEFS.find(a=>a.key===k) || null;
 const certDef   = k => CERT_DEFS.find(c=>c.key===k)    || null;
 
-// ─── DEFAULT ROSTER ───────────────────────────────────────────────────────────
+// Cert hierarchy: paramedic satisfies emt requirement (but not vice versa)
+function meetsReq(emp, requiredCert) {
+  if (!requiredCert) return true;
+  if (emp.certs[requiredCert]) return true;
+  if (requiredCert === "emt" && emp.certs["paramedic"]) return true;
+  return false;
+}
 const mkE = (id,name,certs,unit=null) => ({ id,name,certs,unit,absence:null });
 const DEFAULT_ROSTER = [
   mkE("e1","Anderson, Jacob",      {officer:false,operator:false,tillerman:true, paramedic:false,emt:false}),
@@ -116,16 +122,16 @@ const DEFAULT_ROSTER = [
 const DEFAULT_STATIONS = [
   { id:"s22", label:"Station 22", color:"#dc2626", units:[
     { id:"u_bat22",label:"Battalion 22",minSlots:1,slots:[{id:"sl_b22", label:"Battalion Chief", requiredCert:"officer"}]},
-    { id:"u_m22",  label:"Medic 22",    minSlots:2,slots:[{id:"sl_m22a",label:"Medic A",         requiredCert:"paramedic"},{id:"sl_m22b",label:"Medic B",requiredCert:"paramedic"}]},
+    { id:"u_m22",  label:"Medic 22",    minSlots:2,slots:[{id:"sl_m22a",label:"Medic A (Paramedic)",requiredCert:"paramedic"},{id:"sl_m22b",label:"Medic B (EMT+)",requiredCert:"emt"}]},
     { id:"u_e22",  label:"Engine 22",   minSlots:3,slots:[{id:"sl_e22o",label:"Officer/FFIC",    requiredCert:"officer"},{id:"sl_e22d",label:"Driver/Operator",requiredCert:"operator"},{id:"sl_e22j1",label:"Jump 1",requiredCert:null},{id:"sl_e22j2",label:"Jump 2",requiredCert:null}]},
     { id:"u_sq22", label:"Squad 22",    minSlots:1,slots:[{id:"sl_s22a",label:"Paramedic",       requiredCert:"paramedic"},{id:"sl_s22b",label:"FF/EMT",requiredCert:null}]},
   ]},
   { id:"s23", label:"Station 23", color:"#2563eb", units:[
-    { id:"u_m23",  label:"Medic 23",  minSlots:2,slots:[{id:"sl_m23a",label:"Medic A",     requiredCert:"paramedic"},{id:"sl_m23b",label:"Medic B",requiredCert:"paramedic"}]},
+    { id:"u_m23",  label:"Medic 23",  minSlots:2,slots:[{id:"sl_m23a",label:"Medic A (Paramedic)",requiredCert:"paramedic"},{id:"sl_m23b",label:"Medic B (EMT+)",requiredCert:"emt"}]},
     { id:"u_lad23",label:"Ladder 23", minSlots:3,slots:[{id:"sl_l23o",label:"Officer/FFIC",requiredCert:"officer"},{id:"sl_l23op",label:"Operator",requiredCert:"operator"},{id:"sl_l23t",label:"Tillerman",requiredCert:"tillerman"},{id:"sl_l23j",label:"Jump",requiredCert:null}]},
   ]},
   { id:"s25", label:"Station 25", color:"#059669", units:[
-    { id:"u_m25",label:"Medic 25",  minSlots:2,slots:[{id:"sl_m25a",label:"Medic A",     requiredCert:"paramedic"},{id:"sl_m25b",label:"Medic B",requiredCert:"paramedic"}]},
+    { id:"u_m25",  label:"Medic 25",  minSlots:2,slots:[{id:"sl_m25a",label:"Medic A (Paramedic)",requiredCert:"paramedic"},{id:"sl_m25b",label:"Medic B (EMT+)",requiredCert:"emt"}]},
     { id:"u_e25",label:"Engine 25", minSlots:3,slots:[{id:"sl_e25o",label:"Officer/FFIC",requiredCert:"officer"},{id:"sl_e25op",label:"Operator",requiredCert:"operator"},{id:"sl_e25j1",label:"Jump 1",requiredCert:null},{id:"sl_e25j2",label:"Jump 2",requiredCert:null}]},
   ]},
 ];
@@ -410,7 +416,7 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
     if(!empId) return;
     const emp = roster.find(r=>r.id===empId);
     if(!emp) return;
-    if(slot.requiredCert && !emp.certs[slot.requiredCert]) {
+    if(slot.requiredCert && !meetsReq(emp, slot.requiredCert)) {
       e.dataTransfer.dropEffect = "none"; return;
     }
     e.dataTransfer.dropEffect = "move";
@@ -424,7 +430,7 @@ function DayBoard({ roster, stations, dayState, onChange, shiftUnitKey, compact 
     if(!empId) return;
     const emp = roster.find(r=>r.id===empId);
     if(!emp || emp.absence) return;
-    if(slot.requiredCert && !emp.certs[slot.requiredCert]) return;
+    if(slot.requiredCert && !meetsReq(emp, slot.requiredCert)) return;
 
     // Build next state
     const nextOnDuty = onDutyIds.includes(empId) ? onDutyIds : [...onDutyIds, empId];
